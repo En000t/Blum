@@ -16,13 +16,6 @@ CHECK_INTERVAL = 5
 
 warnings.filterwarnings("ignore", category=UserWarning, module='pywinauto')
 
-# Цвета для отслеживания
-target_colors_hex = ["#f6efef", "#a7a7a4", "#4b483e", "#4d4b47", "#352f27", "#c5c5c5",
-                     "#858583"]  # Цвета серых элементов
-nearby_colors_hex = ["#595755", "#999795"]  # Цвета вспомогательные серых элементов
-target_colors_hex_2 = ["#ff00c7", "#f009ad"]  # Цвета розовых элементов
-freeze_colors_hex = ["#00ffff", "#31bcf3"]  # Цвета заморозки
-
 
 def list_windows_by_title(title_keywords):
     windows = gw.getAllWindows()
@@ -47,13 +40,10 @@ class Logger:
 
 
 class AutoClicker:
-    def __init__(self, hwnd, target_colors_hex, nearby_colors_hex, target_colors_hex_2, freeze_colors_hex, threshold,
-                 logger, target_percentage, collect_freeze):
+    def __init__(self, hwnd, target_colors_hex, nearby_colors_hex, threshold, logger, target_percentage, collect_freeze):
         self.hwnd = hwnd
         self.target_colors_hex = target_colors_hex
         self.nearby_colors_hex = nearby_colors_hex
-        self.target_colors_hex_2 = target_colors_hex_2
-        self.freeze_colors_hex = freeze_colors_hex
         self.threshold = threshold
         self.logger = logger
         self.target_percentage = target_percentage
@@ -146,7 +136,6 @@ class AutoClicker:
 
         target_hsvs = [self.hex_to_hsv(color) for color in self.target_colors_hex]
         nearby_hsvs = [self.hex_to_hsv(color) for color in self.nearby_colors_hex]
-        target_hsvs_2 = [self.hex_to_hsv(color) for color in self.target_colors_hex_2]
 
         with mss.mss() as sct:
             keyboard.add_hotkey('F6', self.toggle_script)
@@ -165,7 +154,7 @@ class AutoClicker:
                     hsv = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2HSV)
 
                     for target_hsv in target_hsvs:
-                        lower_bound = np.array([max(0, target_hsv[0] - 1), 20, 20])
+                        lower_bound = np.array([max(0, target_hsv[0] - 1), 30, 30])
                         upper_bound = np.array([min(179, target_hsv[0] + 1), 255, 255])
                         mask = cv2.inRange(hsv, lower_bound, upper_bound)
                         contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -194,33 +183,6 @@ class AutoClicker:
                             self.logger.log(f'Нажал: {cX} {cY}')
                             self.clicked_points.append((cX, cY))
 
-                    for target_hsv in target_hsvs_2:
-                        lower_bound = np.array([max(0, target_hsv[0] - 1), 30, 30])
-                        upper_bound = np.array([min(179, target_hsv[0] + 1), 255, 255])
-                        mask = cv2.inRange(hsv, lower_bound, upper_bound)
-                        contours, _ = cv2.findContours(mask, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-
-                        num_contours = len(contours)
-                        num_to_click = int(num_contours * self.target_percentage)
-                        contours_to_click = random.sample(contours, num_to_click)
-
-                        for contour in reversed(contours_to_click):
-                            if cv2.contourArea(contour) < 6:
-                                continue
-
-                            M = cv2.moments(contour)
-                            if M["m00"] == 0:
-                                continue
-                            cX = int(M["m10"] / M["m00"]) + monitor["left"]
-                            cY = int(M["m01"] / M["m00"]) + monitor["top"]
-
-                            if any(math.sqrt((cX - px) ** 2 + (cY - py) ** 2) < 35 for px, py in self.clicked_points):
-                                continue
-                            cY += 5
-                            self.click_at(cX, cY)
-                            self.logger.log(f'Нажал: {cX} {cY}')
-                            self.clicked_points.append((cX, cY))
-
                     if self.collect_freeze:
                         self.check_and_click_freeze_button(sct, monitor)
                     self.check_and_click_play_button(sct, monitor)
@@ -231,7 +193,8 @@ class AutoClicker:
                         self.iteration_count = 0
 
     def check_and_click_freeze_button(self, sct, monitor):
-        freeze_hsvs = [self.hex_to_hsv(color) for color in self.freeze_colors_hex]
+        freeze_colors_hex = ["#82dce9", "#55ccdc"]  # Добавьте здесь все цвета заморозки
+        freeze_hsvs = [self.hex_to_hsv(color) for color in freeze_colors_hex]
         current_time = time.time()
         if current_time - self.last_freeze_check_time >= 1 and current_time >= self.freeze_cooldown_time:
             self.last_freeze_check_time = current_time
@@ -284,8 +247,7 @@ if __name__ == "__main__":
 
     while True:
         try:
-            target_percentage = input(
-                "Введите значение от 0 до 1 для рандомизации прокликивания звезд, где 1 означает сбор всех звезд. (Выбор величины зависит от множества факторов: размера экрана, окна и т.д.) Я выбираю значения 0.04 - 0.06 для сбора около 140-150 звезд. Вам необходимо самостоятельно подобрать необходимое значение: ")
+            target_percentage = input("Введите значение от 0 до 1 для рандомизации прокликивания звезд, где 1 означает сбор всех звезд. (Выбор величины зависит от множества факторов: размера экрана, окна и т.д.) Я выбираю значения 0.04 - 0.06 для сбора около 140-150 звезд. Вам необходимо самостоятельно подобрать необходимое значение: ")
             target_percentage = target_percentage.replace(',', '.')
             target_percentage = float(target_percentage)
             if 0 <= target_percentage <= 1:
@@ -309,11 +271,11 @@ if __name__ == "__main__":
     logger = Logger("ENOT")
     logger.log("Вас приветствует бесплатный скрипт - автокликер для игры Blum")
     logger.log('После запуска мини игры нажимайте клавишу F6 на клавиатуре')
-
+    target_colors_hex = ["#c9e100", "#bae70e"]
+    nearby_colors_hex = ["#abff61", "#87ff27"]
     threshold = 0.8  # Порог совпадения шаблона
 
-    auto_clicker = AutoClicker(hwnd, target_colors_hex, nearby_colors_hex, target_colors_hex_2, freeze_colors_hex,
-                               threshold, logger, target_percentage, collect_freeze)
+    auto_clicker = AutoClicker(hwnd, target_colors_hex, nearby_colors_hex, threshold, logger, target_percentage, collect_freeze)
     try:
         auto_clicker.click_color_areas()
     except Exception as e:
